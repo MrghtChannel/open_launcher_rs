@@ -4,7 +4,13 @@ Open Launcher is a package to install and launch modded and vanilla Minecraft in
 
 ## Note about Java
 
-Java is required to run the game. For the moment, this package cannot download Java for you. The path to the Java executable must be provided to the `Launcher` struct.
+Java is required to run the game. This package does not download a JRE: use the Java installation already available on the computer. Set `OPEN_LAUNCHER_JAVA_PATH` to the absolute path of the executable (for example, `C:\\Program Files\\Java\\jdk-21\\bin\\java.exe`). If it is not set, the launcher runs `java` from the system `PATH`.
+
+The Java executable may be located anywhere. If your launcher lets a user choose it in the UI, pass the selected path to `set_java_executable` before launching:
+
+```rust
+launcher.set_java_executable(r"D:\\My Launcher\\Runtime\\Java 21\\bin\\java.exe");
+```
 
 ## Example usage
 
@@ -14,18 +20,13 @@ use std::{env, path};
 
 #[tokio::main]
 async fn main() {
+    let java_path = env::var("OPEN_LAUNCHER_JAVA_PATH").unwrap_or_else(|_| "java".to_string());
     let mut launcher = Launcher::new(
         path::Path::new(env::home_dir().unwrap().as_path())
             .join(".open_launcher")
             .to_str()
             .unwrap(),
-        path::Path::new(env::home_dir().unwrap().as_path())
-            .join(".open_launcher")
-            .join("jre")
-            .join("bin")
-            .join("java.exe")
-            .to_str()
-            .unwrap(),
+        &java_path,
         version::Version {
             minecraft_version: "1.20.2".to_string(),
             loader: None,

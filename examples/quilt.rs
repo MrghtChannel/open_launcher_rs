@@ -3,18 +3,13 @@ use std::{env, path};
 
 #[tokio::main]
 async fn main() {
+    let java_path = env::var("OPEN_LAUNCHER_JAVA_PATH").unwrap_or_else(|_| "java".to_string());
     let mut launcher = Launcher::new(
         path::Path::new(env::home_dir().unwrap().as_path())
             .join(".open_launcher")
             .to_str()
             .unwrap(),
-        path::Path::new(env::home_dir().unwrap().as_path())
-            .join(".open_launcher")
-            .join("jre")
-            .join("bin")
-            .join("java.exe")
-            .to_str()
-            .unwrap(),
+        &java_path,
         version::Version {
             minecraft_version: "1.20.2".to_string(),
             loader: Some("quilt".to_string()),

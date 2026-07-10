@@ -265,6 +265,17 @@ impl Launcher {
         }
     }
 
+    /// Set the Java executable to use when launching the game.
+    ///
+    /// The executable can be located anywhere on the computer. For example,
+    /// a launcher UI may let the user select `D:\\Launcher\\Runtime\\Java 21\\bin\\java.exe`.
+    ///
+    /// # Arguments
+    /// * `java_executable` - Absolute or relative path to `java` / `java.exe`.
+    pub fn set_java_executable(&mut self, java_executable: impl AsRef<std::path::Path>) {
+        self.java_executable = java_executable.as_ref().to_path_buf();
+    }
+
     /// Add a jvm argument to the launch command.
     /// # Arguments
     /// * `arg` - The argument to add.
