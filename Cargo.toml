@@ -7,8 +7,8 @@ description = "Open Launcher is a package to install and launch modded and vanil
 readme = "README.md"
 license = "MIT"
 keywords = ["minecraft", "launcher", "minecraft_launcher"]
-homepage = "https://github.com/Natoune/open_launcher_rs#readme"
-repository = "https://github.com/Natoune/open_launcher_rs"
+homepage = "https://github.com/MrghtChannel/open_launcher_rs#readme"
+repository = "https://github.com/MrghtChannel/open_launcher_rs"
 documentation = "https://docs.rs/open_launcher"
 
 [lib]
