@@ -12,6 +12,23 @@ The Java executable may be located anywhere. If your launcher lets a user choose
 launcher.set_java_executable(r"D:\\My Launcher\\Runtime\\Java 21\\bin\\java.exe");
 ```
 
+## Instances
+
+Use `InstanceManager` to create separate game directories for profiles. The root can be anywhere, and every instance stores its files independently.
+
+```rust
+use open_launcher::{instances::InstanceManager, Launcher};
+
+let instances = InstanceManager::new(r"D:\\My Launcher\\Profiles");
+let instance = instances.create("Create").await?;
+
+let launcher = Launcher::new(
+    instance.path().to_str().unwrap(),
+    r"D:\\My Launcher\\Runtime\\Java 21\\bin\\java.exe",
+    version,
+).await;
+```
+
 ## Example usage
 
 ```rust

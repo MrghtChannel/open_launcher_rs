@@ -8,6 +8,7 @@ use std::{
 use tokio::{fs, sync::broadcast};
 
 pub mod auth;
+pub mod instances;
 pub mod version;
 
 mod assets;
