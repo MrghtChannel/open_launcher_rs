@@ -1,11 +1,16 @@
+use crate::events::Progress;
 use crate::utils::{try_download_file, LauncherError};
 use crate::Launcher;
+use futures::stream::{self, StreamExt};
 use sha1::Digest;
 use std::error::Error;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tokio::fs;
 
+const CONCURRENT_DOWNLOADS: usize = 32;
+
 impl Launcher {
-    /// Install assets for the current version
     pub async fn install_assets(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
         if self.version.profile.is_null() {
             return Err(Box::from(LauncherError(
@@ -57,7 +62,6 @@ impl Launcher {
         }
 
         let mut total: u64 = 0;
-        let mut current: u64 = 0;
         let mut objects_to_download = vec![];
 
         for (name, object) in index["objects"].as_object().unwrap() {
@@ -79,45 +83,71 @@ impl Launcher {
             }
         }
 
-        if !objects_to_download.is_empty() {
-            self.emit_progress("downloading_assets", "", total, 0);
+        if objects_to_download.is_empty() {
+            return Ok(());
         }
 
-        for object in objects_to_download {
-            let name = object["name"].as_str().unwrap();
-            let hash = object["hash"].as_str().unwrap().to_string();
-            let object_path = objects_dir.join(&hash[..2]).join(&hash);
+        self.emit_progress("downloading_assets", "", total, 0);
 
-            fs::create_dir_all(object_path.parent().unwrap()).await?;
+        let is_legacy = self.version.profile["assets"].as_str().unwrap() == "legacy"
+            || self.version.profile["assets"].as_str().unwrap() == "pre-1.6";
+        let resources_dir = self.game_dir.join("resources");
+        let current = Arc::new(AtomicU64::new(0));
+        let progress_sender = self.progress_sender.clone();
 
-            let object_url = format!(
-                "https://resources.download.minecraft.net/{}",
-                hash[..2].to_string() + "/" + &hash
-            );
+        let results: Vec<Result<(), Box<dyn Error + Send + Sync>>> =
+            stream::iter(objects_to_download.into_iter())
+                .map(|object| {
+                    let objects_dir = objects_dir.clone();
+                    let resources_dir = resources_dir.clone();
+                    let current = current.clone();
+                    let progress_sender = progress_sender.clone();
 
-            try_download_file(&object_url, &object_path, &hash, 3).await?;
+                    async move {
+                        let name = object["name"].as_str().unwrap().to_string();
+                        let hash = object["hash"].as_str().unwrap().to_string();
+                        let size = object["size"].as_u64().unwrap();
+                        let object_path = objects_dir.join(&hash[..2]).join(&hash);
 
-            current += object["size"].as_u64().unwrap();
-            self.emit_progress("downloading_assets", name, total, current);
+                        fs::create_dir_all(object_path.parent().unwrap()).await?;
 
-            // Legacy assets
-            if self.version.profile["assets"].as_str().unwrap() == "legacy"
-                || self.version.profile["assets"].as_str().unwrap() == "pre-1.6"
-            {
-                let resources_path = self
-                    .game_dir
-                    .join("resources")
-                    .join(object["name"].as_str().unwrap());
-                fs::create_dir_all(resources_path.parent().unwrap()).await?;
-                fs::copy(&object_path, &resources_path).await?;
-            }
+                        let object_url = format!(
+                            "https://resources.download.minecraft.net/{}/{}",
+                            &hash[..2],
+                            hash
+                        );
+
+                        try_download_file(&object_url, &object_path, &hash, 3).await?;
+
+                        let new_current = current.fetch_add(size, Ordering::SeqCst) + size;
+
+                        let _ = progress_sender.send(Progress {
+                            task: "downloading_assets".to_string(),
+                            file: name.clone(),
+                            current: new_current,
+                            total,
+                        });
+
+                        if is_legacy {
+                            let resources_path = resources_dir.join(&name);
+                            fs::create_dir_all(resources_path.parent().unwrap()).await?;
+                            fs::copy(&object_path, &resources_path).await?;
+                        }
+
+                        Ok::<(), Box<dyn Error + Send + Sync>>(())
+                    }
+                })
+                .buffer_unordered(CONCURRENT_DOWNLOADS)
+                .collect()
+                .await;
+        for result in results {
+            result?;
         }
 
         Ok(())
     }
 
     async fn fix_log4j_vulnerability(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
-        // Fix log4j vulnerability
         if self.version.profile["logging"].is_object()
             && self.version.profile["logging"]["client"].is_object()
         {
